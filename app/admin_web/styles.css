@@ -5,8 +5,8 @@
   --ink: #172033;
   --muted: #647084;
   --line: #d8e0ec;
-  --primary: #0f766e;
-  --primary-dark: #115e59;
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
   --blue: #2563eb;
   --amber: #b45309;
   --danger: #b91c1c;
@@ -170,8 +170,8 @@ th {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: #14b8a6;
-  color: #042f2e;
+  background: #4f46e5;
+  color: #ffffff;
   font-weight: 900;
 }
 
