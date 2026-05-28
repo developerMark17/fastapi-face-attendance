@@ -5,7 +5,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8000 \
-    WORKERS=2
+    WORKERS=2 \
+    CMAKE_BUILD_PARALLEL_LEVEL=1 \
+    MAKEFLAGS="-j1"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
