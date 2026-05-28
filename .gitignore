@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environments and databases
+.env
+attendance.db
+
+# Logs
+*.log
+server.log
+server.err.log
+
+# Editors
+.vscode/
+.idea/
+.qodo/
+.DS_Store

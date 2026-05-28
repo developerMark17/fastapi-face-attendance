@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Attendance Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="login-view" class="login-view">
+      <section class="login-panel">
+        <div>
+          <p class="eyebrow">College Attendance</p>
+          <h1>Admin Login</h1>
+        </div>
+        <form id="login-form" class="stack">
+          <label>
+            Username
+            <input id="login-username" name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Sign In</button>
+          <p id="login-error" class="error-text"></p>
+        </form>
+      </section>
+    </main>
+
+    <main id="app-view" class="app-view hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="mark">A</span>
+          <div>
+            <strong>Attendance</strong>
+            <small>Admin</small>
+          </div>
+        </div>
+        <nav class="tabs" aria-label="Admin sections">
+          <button class="tab active" data-view="dashboard">Overview</button>
+          <button class="tab" data-view="students">Students</button>
+          <button class="tab" data-view="attendance">Attendance</button>
+          <button class="tab" data-view="payments">Payments</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Live Operations</p>
+            <h2 id="view-title">Overview</h2>
+          </div>
+          <button id="logout-button" class="secondary-button">Logout</button>
+        </header>
+
+        <section id="notice" class="notice hidden"></section>
+
+        <section id="dashboard-section" class="view-section">
+          <div id="metrics" class="metrics"></div>
+          <div class="split">
+            <section class="panel">
+              <div class="panel-heading">
+                <h3>Latest Attendance</h3>
+                <button id="refresh-dashboard" class="secondary-button">Refresh</button>
+              </div>
+              <div id="latest-logs" class="table-shell"></div>
+            </section>
+            <section class="panel">
+              <h3>Department Mix</h3>
+              <div id="department-breakdown" class="bars"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="students-section" class="view-section hidden">
+          <div class="toolbar">
+            <input id="student-search" placeholder="Search name, code, email" />
+            <button id="refresh-students" class="secondary-button">Refresh</button>
+          </div>
+          <form id="student-form" class="grid-form">
+            <input type="hidden" id="student-id" />
+            <label>Name<input id="student-name" required /></label>
+            <label>Student Code<input id="student-code" /></label>
+            <label>Email<input id="student-email" type="email" /></label>
+            <label>Phone<input id="student-phone" /></label>
+            <label>Department<input id="student-department" value="General" /></label>
+            <label>Program<input id="student-program" value="General" /></label>
+            <label>Semester<input id="student-semester" type="number" min="1" max="12" value="1" /></label>
+            <label>Section<input id="student-section" value="A" /></label>
+            <label>Status
+              <select id="student-status">
+                <option value="active">active</option>
+                <option value="inactive">inactive</option>
+                <option value="suspended">suspended</option>
+              </select>
+            </label>
+            <label>Payment
+              <select id="student-payment-status">
+                <option value="trial">trial</option>
+                <option value="pending">pending</option>
+                <option value="paid">paid</option>
+                <option value="due">due</option>
+                <option value="overdue">overdue</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="submit" id="student-save">Add Student</button>
+              <button type="button" id="student-reset" class="secondary-button">Clear</button>
+            </div>
+          </form>
+          <div id="students-table" class="table-shell"></div>
+        </section>
+
+        <section id="attendance-section" class="view-section hidden">
+          <div class="toolbar">
+            <input id="attendance-department" placeholder="Department" />
+            <input id="attendance-section-filter" placeholder="Section" />
+            <input id="attendance-course" placeholder="Course code" />
+            <button id="refresh-attendance" class="secondary-button">Refresh</button>
+          </div>
+          <div id="attendance-summary" class="metrics compact"></div>
+          <div id="attendance-table" class="table-shell"></div>
+        </section>
+
+        <section id="payments-section" class="view-section hidden">
+          <div class="toolbar">
+            <select id="plan-select"></select>
+            <input id="payment-student-code" placeholder="Student code optional" />
+            <button id="start-checkout">Create Checkout</button>
+            <button id="refresh-payments" class="secondary-button">Refresh</button>
+          </div>
+          <div id="payments-table" class="table-shell"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
