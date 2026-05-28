@@ -38,7 +38,7 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function getAvatarHtml(name) {
+function getAvatarHtml(name, userId) {
   if (!name) return "";
   const parts = name.trim().split(/\s+/);
   const initials = parts.length > 1 
@@ -63,8 +63,17 @@ function getAvatarHtml(name) {
   
   const index = Math.abs(hash) % gradients.length;
   const [c1, c2] = gradients[index];
+
+  if (userId) {
+    return `<div class="avatar-container">
+      <img class="avatar" src="/uploads/faces/${userId}.jpg" alt="${escapeHtml(name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+      <div class="avatar" style="background: linear-gradient(135deg, ${c1}, ${c2}); display: none;">${escapeHtml(cleanInitials)}</div>
+    </div>`;
+  }
+  
   return `<div class="avatar" style="background: linear-gradient(135deg, ${c1}, ${c2})">${escapeHtml(cleanInitials)}</div>`;
 }
+
 
 function showNotice(message, type = "success") {
   if (!message) {
@@ -168,7 +177,7 @@ async function loadDashboard() {
       els.latestLogs,
       ["Student", "Code", "Action", "Time"],
       (data.latest_logs || []).map((row) => [
-        `<td class="user-cell">${getAvatarHtml(row.name)}<span>${escapeHtml(row.name)}</span></td>`,
+        `<td class="user-cell">${getAvatarHtml(row.name, row.user_id)}<span>${escapeHtml(row.name)}</span></td>`,
         `<td>${escapeHtml(row.student_code || "")}</td>`,
         `<td>${badge(row.action)}</td>`,
         `<td>${escapeHtml(dateTime(row.timestamp))}</td>`,
@@ -200,7 +209,7 @@ async function loadStudents() {
       els.studentsTable,
       ["Name", "Code", "Dept", "Sem", "Face", "Payment", "Status", ""],
       state.students.map((student) => [
-        `<td class="user-cell">${getAvatarHtml(student.name)}<div><strong>${escapeHtml(student.name)}</strong><br><small>${escapeHtml(student.email || "")}</small></div></td>`,
+        `<td class="user-cell">${getAvatarHtml(student.name, student.id)}<div><strong>${escapeHtml(student.name)}</strong><br><small>${escapeHtml(student.email || "")}</small></div></td>`,
         `<td>${escapeHtml(student.student_code || "")}</td>`,
         `<td>${escapeHtml(student.department)} / ${escapeHtml(student.section)}</td>`,
         `<td>${escapeHtml(student.semester)}</td>`,
@@ -295,7 +304,7 @@ async function loadAttendance() {
       els.attendanceTable,
       ["Student", "Code", "Dept", "Action", "Course", "Time"],
       (data.logs || []).map((row) => [
-        `<td class="user-cell">${getAvatarHtml(row.name)}<span>${escapeHtml(row.name)}</span></td>`,
+        `<td class="user-cell">${getAvatarHtml(row.name, row.user_id)}<span>${escapeHtml(row.name)}</span></td>`,
         `<td>${escapeHtml(row.student_code || "")}</td>`,
         `<td>${escapeHtml(row.department || "")} / ${escapeHtml(row.section || "")}</td>`,
         `<td>${badge(row.action)}</td>`,

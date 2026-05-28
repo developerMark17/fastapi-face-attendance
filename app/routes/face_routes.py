@@ -113,12 +113,19 @@ async def register_face_endpoint(
         enrollment_year=enrollment_year,
     )
 
+    import os
+    faces_dir = os.path.join("uploads", "faces")
+    os.makedirs(faces_dir, exist_ok=True)
+    with open(os.path.join(faces_dir, f"{user.id}.jpg"), "wb") as f:
+        f.write(image_bytes)
+
     return RegisterFaceResponse(
         user_id=user.id,
         name=user.name,
         student_code=user.student_code,
         message="Face registered successfully",
     )
+
 
 
 @router.post("/recognize-face", response_model=RecognizeFaceResponse)

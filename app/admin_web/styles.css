@@ -461,6 +461,13 @@ th {
   gap: 12px;
 }
 
+.avatar-container {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
 .avatar {
   width: 34px;
   height: 34px;
@@ -474,5 +481,7 @@ th {
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   box-shadow: 0 2px 4px rgba(23, 32, 51, 0.12);
+  object-fit: cover;
 }
+
 

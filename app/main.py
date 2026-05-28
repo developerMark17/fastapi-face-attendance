@@ -167,6 +167,11 @@ app.include_router(face_router)
 app.include_router(admin_router)
 app.include_router(payment_router)
 
+uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
 admin_web_dir = Path(__file__).resolve().parent / "admin_web"
 if admin_web_dir.exists():
     app.mount("/admin-panel", StaticFiles(directory=str(admin_web_dir), html=True), name="admin-panel")
+
