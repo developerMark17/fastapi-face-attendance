@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: fastapi-face-attendance
+    env: docker
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:////data/attendance.db
+      - key: PAYMENT_PROVIDER
+        value: demo
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+    disk:
+      name: sqlite-data
+      mountPath: /data
+      sizeGB: 1
