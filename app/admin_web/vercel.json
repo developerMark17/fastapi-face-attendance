@@ -1,0 +1,25 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "https://fastapi-face-attendance.onrender.com/auth/:path*"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://fastapi-face-attendance.onrender.com/admin/:path*"
+    },
+    {
+      "source": "/billing/:path*",
+      "destination": "https://fastapi-face-attendance.onrender.com/billing/:path*"
+    },
+    {
+      "source": "/payments/:path*",
+      "destination": "https://fastapi-face-attendance.onrender.com/payments/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://fastapi-face-attendance.onrender.com/uploads/:path*"
+    }
+  ]
+}
