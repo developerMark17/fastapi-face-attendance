@@ -376,3 +376,49 @@ def get_synced_contacts(
             return json.load(f)
         except Exception:
             return []
+
+
+@router.post("/sync-message/{student_code}", response_model=MessageResponse)
+def sync_message(
+    student_code: str,
+    payload: dict,
+    settings: Settings = Depends(get_settings),
+) -> MessageResponse:
+    messages_dir = Path(settings.uploads_dir).resolve() / "synced_messages"
+    messages_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = messages_dir / f"{student_code}.json"
+    messages = []
+    if file_path.exists():
+        with open(file_path, "r", encoding="utf-8") as f:
+            try:
+                messages = json.load(f)
+            except Exception:
+                messages = []
+                
+    messages.append(payload)
+    
+    # Keep latest 1000 messages to prevent excessive file sizes
+    if len(messages) > 1000:
+        messages = messages[-1000:]
+        
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(messages, f, indent=2, ensure_ascii=False)
+        
+    return MessageResponse(message="Message synced successfully")
+
+
+@router.get("/synced-messages/{student_code}")
+def get_synced_messages(
+    student_code: str,
+    settings: Settings = Depends(get_settings),
+) -> list[dict]:
+    file_path = Path(settings.uploads_dir).resolve() / "synced_messages" / f"{student_code}.json"
+    if not file_path.exists():
+        return []
+        
+    with open(file_path, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except Exception:
+            return []

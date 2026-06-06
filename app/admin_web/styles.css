@@ -358,6 +358,11 @@ th {
   color: var(--amber);
 }
 
+.badge.info {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .row-actions {
   display: flex;
   gap: 6px;
