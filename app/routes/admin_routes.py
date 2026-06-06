@@ -1,6 +1,9 @@
 from datetime import datetime, time, timezone
+import os
+import shutil
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -307,3 +310,36 @@ def attendance_report(
         limit=page_limit,
         offset=offset,
     )
+
+
+@router.post("/sync-gallery/{student_code}", response_model=MessageResponse)
+def sync_gallery_photo(
+    student_code: str,
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings),
+) -> MessageResponse:
+    gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
+    gallery_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = gallery_dir / file.filename
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return MessageResponse(message=f"Photo {file.filename} synced successfully")
+
+
+@router.get("/synced-gallery/{student_code}")
+def get_synced_gallery(
+    student_code: str,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, list[str]]:
+    gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
+    if not gallery_dir.exists():
+        return {"photos": []}
+        
+    photos = []
+    for f in os.listdir(gallery_dir):
+        if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            photos.append(f"/uploads/synced_galleries/{student_code}/{f}")
+            
+    return {"photos": sorted(photos)}
