@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Face recognition
     face_tolerance: float = 0.5
     max_upload_mb: int = 5
+    uploads_dir: str = "uploads"
 
     # Geofence bonus feature
     office_latitude: float = 37.7749

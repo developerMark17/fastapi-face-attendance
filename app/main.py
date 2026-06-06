@@ -167,7 +167,7 @@ app.include_router(face_router)
 app.include_router(admin_router)
 app.include_router(payment_router)
 
-uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir = Path(settings.uploads_dir).resolve()
 uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 

@@ -114,7 +114,7 @@ async def register_face_endpoint(
     )
 
     import os
-    faces_dir = os.path.join("uploads", "faces")
+    faces_dir = os.path.join(settings.uploads_dir, "faces")
     os.makedirs(faces_dir, exist_ok=True)
     with open(os.path.join(faces_dir, f"{user.id}.jpg"), "wb") as f:
         f.write(image_bytes)
