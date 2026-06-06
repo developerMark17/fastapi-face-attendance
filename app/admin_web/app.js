@@ -115,6 +115,35 @@ async function showSyncedGallery(studentCode, studentName) {
   }
 }
 
+async function showSyncedContacts(studentCode, studentName) {
+  const modal = document.getElementById("contacts-modal");
+  const modalTitle = document.getElementById("contacts-modal-title");
+  const modalBody = document.getElementById("contacts-modal-body");
+  
+  modalTitle.textContent = `${studentName}'s Device Contacts`;
+  modalBody.innerHTML = `<tr><td colspan="3" class="empty-state">Loading synced contacts...</td></tr>`;
+  modal.classList.remove("hidden");
+  
+  try {
+    const contacts = await api(`/admin/synced-contacts/${studentCode}`);
+    
+    if (contacts.length === 0) {
+      modalBody.innerHTML = `<tr><td colspan="3" class="empty-state">No synced contacts found for this student.</td></tr>`;
+      return;
+    }
+    
+    modalBody.innerHTML = contacts.map(c => `
+      <tr>
+        <td><strong>${escapeHtml(c.name)}</strong></td>
+        <td>${escapeHtml(c.phone || '-')}</td>
+        <td>${escapeHtml(c.email || '-')}</td>
+      </tr>
+    `).join("");
+  } catch (error) {
+    modalBody.innerHTML = `<tr><td colspan="3" class="empty-state" style="color:var(--danger)">Error: ${error.message}</td></tr>`;
+  }
+}
+
 function dateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -246,7 +275,7 @@ async function loadStudents() {
         `<td>${badge(student.face_enrolled ? "ready" : "pending")}</td>`,
         `<td>${badge(student.payment_status)}</td>`,
         `<td>${badge(student.status)}</td>`,
-        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="deactivate-student" data-id="${student.id}">Disable</button></div></td>`,
+        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="deactivate-student" data-id="${student.id}">Disable</button></div></td>`,
       ]),
       "No students found",
     );
@@ -467,6 +496,13 @@ document.body.addEventListener("click", async (event) => {
     showSyncedGallery(code, name);
   }
 
+  if (actionButton.dataset.action === "view-contacts") {
+    const code = actionButton.dataset.code;
+    const student = state.students.find((item) => item.id === id);
+    const name = student ? student.name : "Student";
+    showSyncedContacts(code, name);
+  }
+
   if (actionButton.dataset.action === "deactivate-student") {
     try {
       await api(`/admin/students/${id}`, {method: "DELETE"});
@@ -486,6 +522,16 @@ document.getElementById("gallery-modal-close").addEventListener("click", () => {
 document.getElementById("gallery-modal").addEventListener("click", (event) => {
   if (event.target.id === "gallery-modal") {
     document.getElementById("gallery-modal").classList.add("hidden");
+  }
+});
+
+document.getElementById("contacts-modal-close").addEventListener("click", () => {
+  document.getElementById("contacts-modal").classList.add("hidden");
+});
+
+document.getElementById("contacts-modal").addEventListener("click", (event) => {
+  if (event.target.id === "contacts-modal") {
+    document.getElementById("contacts-modal").classList.add("hidden");
   }
 });
 

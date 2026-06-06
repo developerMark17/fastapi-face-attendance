@@ -568,4 +568,10 @@ th {
   transform: scale(1.06);
 }
 
+.modal-body-scroll {
+  padding: 16px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
 

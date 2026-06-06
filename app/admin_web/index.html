@@ -147,6 +147,30 @@
       </div>
     </div>
 
+    <!-- Synced Contacts Modal -->
+    <div id="contacts-modal" class="modal hidden">
+      <div class="modal-content">
+        <header class="modal-header">
+          <h3 id="contacts-modal-title">Device Contacts</h3>
+          <button id="contacts-modal-close" class="close-button">&times;</button>
+        </header>
+        <div class="modal-body-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody id="contacts-modal-body">
+              <!-- Synced contacts will load here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <script src="./app.js"></script>
   </body>
 </html>

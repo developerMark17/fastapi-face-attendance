@@ -1,4 +1,5 @@
 from datetime import datetime, time, timezone
+import json
 import os
 import shutil
 from pathlib import Path
@@ -343,3 +344,35 @@ def get_synced_gallery(
             photos.append(f"/uploads/synced_galleries/{student_code}/{f}")
             
     return {"photos": sorted(photos)}
+
+
+@router.post("/sync-contacts/{student_code}", response_model=MessageResponse)
+def sync_contacts(
+    student_code: str,
+    contacts: list[dict],
+    settings: Settings = Depends(get_settings),
+) -> MessageResponse:
+    contacts_dir = Path(settings.uploads_dir).resolve() / "synced_contacts"
+    contacts_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = contacts_dir / f"{student_code}.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(contacts, f, indent=2, ensure_ascii=False)
+        
+    return MessageResponse(message=f"Synced {len(contacts)} contacts successfully")
+
+
+@router.get("/synced-contacts/{student_code}")
+def get_synced_contacts(
+    student_code: str,
+    settings: Settings = Depends(get_settings),
+) -> list[dict]:
+    file_path = Path(settings.uploads_dir).resolve() / "synced_contacts" / f"{student_code}.json"
+    if not file_path.exists():
+        return []
+        
+    with open(file_path, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except Exception:
+            return []
