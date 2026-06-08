@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "change-this-secret-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60
+    jwt_expire_minutes: int = 525600
     admin_username: str = "admin"
     admin_password: str = "admin123"
 

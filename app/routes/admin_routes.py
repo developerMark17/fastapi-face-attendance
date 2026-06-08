@@ -1,10 +1,13 @@
 from datetime import datetime, time, timezone
+import csv
+import io
 import json
 import os
 import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -195,6 +198,58 @@ def list_students(
     )
 
 
+@router.get("/students/export-csv")
+def export_students_csv(
+    q: str | None = None,
+    department: str | None = None,
+    section: str | None = None,
+    status_value: str | None = Query(default=None, alias="status"),
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    query = _student_query(db)
+
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(User.name.ilike(like), User.student_code.ilike(like), User.email.ilike(like)))
+    if department:
+        query = query.filter(User.department == department)
+    if section:
+        query = query.filter(User.section == section)
+    if status_value:
+        query = query.filter(User.status == status_value)
+
+    students = query.order_by(User.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Name", "Student Code", "Email", "Phone", 
+        "Department", "Section", "Semester", "Status", "Payment Status"
+    ])
+
+    for s in students:
+        writer.writerow([
+            s.name,
+            s.student_code or "",
+            s.email or "",
+            s.phone or "",
+            s.department,
+            s.section,
+            s.semester,
+            s.status,
+            s.payment_status
+        ])
+
+    output.seek(0)
+    mem_file = io.BytesIO(output.getvalue().encode('utf-8'))
+    return StreamingResponse(
+        mem_file,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=students.csv"}
+    )
+
+
 @router.post("/students", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
 def create_student(
     payload: StudentCreate,
@@ -310,6 +365,61 @@ def attendance_report(
         checked_in_now=checked_in_now,
         limit=page_limit,
         offset=offset,
+    )
+
+
+@router.get("/attendance/export-csv")
+@router.get("/reports/attendance/export-csv")
+def export_attendance_csv(
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    department: str | None = None,
+    section: str | None = None,
+    course_code: str | None = None,
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    query = db.query(Attendance).join(Attendance.user)
+
+    if from_date:
+        query = query.filter(Attendance.timestamp >= from_date)
+    if to_date:
+        query = query.filter(Attendance.timestamp <= to_date)
+    if department:
+        query = query.filter(User.department == department)
+    if section:
+        query = query.filter(User.section == section)
+    if course_code:
+        query = query.filter(Attendance.course_code == course_code)
+
+    logs = query.order_by(Attendance.timestamp.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Student Name", "Student Code", "Department", "Section",
+        "Action", "Course Code", "Session Name", "Source", "Timestamp"
+    ])
+
+    for log in logs:
+        writer.writerow([
+            log.user.name,
+            log.user.student_code or "",
+            log.user.department,
+            log.user.section,
+            log.action,
+            log.course_code or "",
+            log.session_name or "",
+            log.source,
+            as_utc(log.timestamp).isoformat() if log.timestamp else ""
+        ])
+
+    output.seek(0)
+    mem_file = io.BytesIO(output.getvalue().encode('utf-8'))
+    return StreamingResponse(
+        mem_file,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=attendance.csv"}
     )
 
 
