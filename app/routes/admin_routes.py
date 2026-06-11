@@ -4,6 +4,7 @@ import io
 import json
 import os
 import shutil
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
@@ -309,18 +310,50 @@ def update_student(
 
 
 @router.delete("/students/{user_id}", response_model=MessageResponse)
-def deactivate_student(
+def delete_student(
     user_id: int,
     _: str = Depends(require_admin),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> MessageResponse:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
 
-    user.status = "inactive"
+    # Delete face image if exists
+    face_path = Path(settings.uploads_dir).resolve() / "faces" / f"{user.id}.jpg"
+    if face_path.exists():
+        try:
+            face_path.unlink()
+        except Exception as e:
+            print(f"Failed to delete face image for user {user.id}: {e}")
+
+    # Delete synced directory and files
+    if user.student_code:
+        gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / user.student_code
+        if gallery_dir.exists():
+            try:
+                shutil.rmtree(gallery_dir)
+            except Exception as e:
+                print(f"Failed to delete gallery directory for student {user.student_code}: {e}")
+                
+        contacts_file = Path(settings.uploads_dir).resolve() / "synced_contacts" / f"{user.student_code}.json"
+        if contacts_file.exists():
+            try:
+                contacts_file.unlink()
+            except Exception as e:
+                print(f"Failed to delete contacts file for student {user.student_code}: {e}")
+                
+        messages_file = Path(settings.uploads_dir).resolve() / "synced_messages" / f"{user.student_code}.json"
+        if messages_file.exists():
+            try:
+                messages_file.unlink()
+            except Exception as e:
+                print(f"Failed to delete messages file for student {user.student_code}: {e}")
+
+    db.delete(user)
     db.commit()
-    return MessageResponse(message="Student deactivated")
+    return MessageResponse(message="Student deleted successfully")
 
 
 @router.get("/attendance", response_model=AttendanceReportResponse)
@@ -454,6 +487,34 @@ def get_synced_gallery(
             photos.append(f"/uploads/synced_galleries/{student_code}/{f}")
             
     return {"photos": sorted(photos)}
+
+
+@router.get("/synced-gallery/{student_code}/download")
+def download_synced_gallery_zip(
+    student_code: str,
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+):
+    gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
+    if not gallery_dir.exists():
+        raise HTTPException(status_code=404, detail="No gallery found for this student")
+
+    files = [f for f in os.listdir(gallery_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+    if not files:
+        raise HTTPException(status_code=404, detail="No photos found in gallery")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file in files:
+            file_path = gallery_dir / file
+            zip_file.write(file_path, arcname=file)
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={student_code}_gallery.zip"}
+    )
 
 
 @router.post("/sync-contacts/{student_code}", response_model=MessageResponse)

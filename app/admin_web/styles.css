@@ -232,6 +232,20 @@ th {
   background: #dce5f1;
 }
 
+.secondary-button.danger-button {
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fca5a5;
+}
+
+.secondary-button.danger-button:hover {
+  background: #fee2e2;
+}
+
+.download-img-btn:hover {
+  background: rgba(16, 24, 39, 0.9) !important;
+}
+
 .notice {
   border-radius: 8px;
   border: 1px solid var(--line);

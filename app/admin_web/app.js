@@ -91,6 +91,11 @@ async function showSyncedGallery(studentCode, studentName) {
   const modalBody = document.getElementById("gallery-modal-body");
   
   modalTitle.textContent = `${studentName}'s Device Gallery`;
+  const downloadAllBtn = document.getElementById("gallery-modal-download-all");
+  if (downloadAllBtn) {
+    downloadAllBtn.dataset.code = studentCode;
+    downloadAllBtn.style.display = "block";
+  }
   modalBody.innerHTML = `<div class="empty-state">Loading synced photos...</div>`;
   modal.classList.remove("hidden");
   
@@ -100,18 +105,24 @@ async function showSyncedGallery(studentCode, studentName) {
     
     if (photos.length === 0) {
       modalBody.innerHTML = `<div class="empty-state">No synced photos found for this student.</div>`;
+      if (downloadAllBtn) downloadAllBtn.style.display = "none";
       return;
     }
     
-    modalBody.innerHTML = photos.map(url => `
-      <div class="gallery-img-wrapper">
-        <a href="${url}" target="_blank">
-          <img src="${url}" class="gallery-img" alt="Gallery Photo" />
-        </a>
-      </div>
-    `).join("");
+    modalBody.innerHTML = photos.map(url => {
+      const fileName = url.substring(url.lastIndexOf('/') + 1);
+      return `
+        <div class="gallery-img-wrapper" style="position: relative;">
+          <a href="${url}" target="_blank">
+            <img src="${url}" class="gallery-img" alt="Gallery Photo" />
+          </a>
+          <a href="${url}" download="${fileName}" class="download-img-btn" style="position: absolute; bottom: 8px; right: 8px; background: rgba(16, 24, 39, 0.7); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); transition: background 0.2s;">Download</a>
+        </div>
+      `;
+    }).join("");
   } catch (error) {
     modalBody.innerHTML = `<div class="empty-state" style="color:var(--danger)">Error: ${error.message}</div>`;
+    if (downloadAllBtn) downloadAllBtn.style.display = "none";
   }
 }
 
@@ -312,7 +323,7 @@ async function loadStudents() {
         `<td>${badge(student.face_enrolled ? "ready" : "pending")}</td>`,
         `<td>${badge(student.payment_status)}</td>`,
         `<td>${badge(student.status)}</td>`,
-        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="view-messages" data-id="${student.id}" data-code="${student.student_code || ''}">Messages</button><button class="secondary-button" data-action="deactivate-student" data-id="${student.id}">Disable</button></div></td>`,
+        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="view-messages" data-id="${student.id}" data-code="${student.student_code || ''}">Messages</button><button class="secondary-button danger-button" data-action="delete-student" data-id="${student.id}">Delete</button></div></td>`,
       ]),
       "No students found",
     );
@@ -547,10 +558,13 @@ document.body.addEventListener("click", async (event) => {
     showSyncedMessages(code, name);
   }
 
-  if (actionButton.dataset.action === "deactivate-student") {
+  if (actionButton.dataset.action === "delete-student") {
+    if (!confirm("Are you sure you want to permanently delete this student, their attendance history, and all synced files? This action cannot be undone.")) {
+      return;
+    }
     try {
       await api(`/admin/students/${id}`, {method: "DELETE"});
-      showNotice("Student disabled");
+      showNotice("Student deleted");
       loadStudents();
       loadDashboard();
     } catch (error) {
@@ -588,7 +602,11 @@ document.getElementById("messages-modal").addEventListener("click", (event) => {
     document.getElementById("messages-modal").classList.add("hidden");
   }
 });
-
+document.getElementById("gallery-modal-download-all").addEventListener("click", (event) => {
+  const code = event.target.dataset.code;
+  if (!code) return;
+  window.open(`/admin/synced-gallery/${code}/download`, "_blank");
+});
 ["attendance-department", "attendance-section-filter", "attendance-course"].forEach((id) => {
   document.getElementById(id).addEventListener("input", () => {
     window.clearTimeout(window.attendanceFilterTimer);

@@ -141,7 +141,10 @@
       <div class="modal-content">
         <header class="modal-header">
           <h3 id="gallery-modal-title">Device Gallery</h3>
-          <button id="gallery-modal-close" class="close-button">&times;</button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button id="gallery-modal-download-all" class="secondary-button" style="min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px;">Download All (ZIP)</button>
+            <button id="gallery-modal-close" class="close-button">&times;</button>
+          </div>
         </header>
         <div id="gallery-modal-body" class="gallery-grid">
           <!-- Synced photos will load here -->
