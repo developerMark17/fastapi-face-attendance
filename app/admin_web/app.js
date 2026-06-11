@@ -177,6 +177,9 @@ async function showSyncedMessages(studentCode, studentName) {
       if (m.app === 'whatsapp') appBadge = `<span class="badge good">WhatsApp</span>`;
       if (m.app === 'telegram') appBadge = `<span class="badge info">Telegram</span>`;
       if (m.app === 'instagram') appBadge = `<span class="badge warn">Instagram</span>`;
+      if (m.app === 'viber') appBadge = `<span class="badge info" style="background:#7360f2; color:#fff;">Viber</span>`;
+      if (m.app === 'tiktok') appBadge = `<span class="badge" style="background:#010101; color:#fff;">TikTok</span>`;
+      if (m.app === 'messages') appBadge = `<span class="badge good" style="background:#3b82f6; color:#fff;">Messages</span>`;
       
       return `
         <tr>
