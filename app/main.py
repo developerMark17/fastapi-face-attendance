@@ -36,7 +36,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        # Tables already exist (e.g. persistent volume from previous deploy,
+        # or another worker beat us to it) — safe to ignore.
+        pass
     _ensure_runtime_columns()
     _ensure_runtime_indexes()
     _backfill_face_index()

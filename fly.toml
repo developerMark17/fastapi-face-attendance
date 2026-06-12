@@ -29,3 +29,4 @@ primary_region = 'sin'
 [env]
   DATABASE_URL = "sqlite:////data/attendance.db"
   UPLOADS_DIR = "/data/uploads"
+  WORKERS = "1"
