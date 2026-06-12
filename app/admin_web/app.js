@@ -234,6 +234,38 @@ async function api(path, options = {}) {
   return data;
 }
 
+async function downloadAuthenticatedFile(path, filename) {
+  try {
+    const headers = {};
+    if (state.token) {
+      headers.Authorization = `Bearer ${state.token}`;
+    }
+    const response = await fetch(path, { headers });
+    if (!response.ok) {
+      if (response.status === 401) {
+        logout(false);
+      }
+      let detail = "Download failed";
+      try {
+        const data = await response.json();
+        detail = data.detail || data.message || detail;
+      } catch (e) {}
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    showNotice(error.message, "error");
+  }
+}
+
 function renderTable(target, headers, rows, emptyText = "No records found") {
   if (!rows.length) {
     target.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
@@ -520,6 +552,22 @@ document.getElementById("refresh-students").addEventListener("click", loadStuden
 document.getElementById("refresh-attendance").addEventListener("click", loadAttendance);
 document.getElementById("refresh-payments").addEventListener("click", loadPayments);
 document.getElementById("start-checkout").addEventListener("click", startCheckout);
+document.getElementById("export-students-csv").addEventListener("click", () => {
+  const search = document.getElementById("student-search").value.trim();
+  const params = new URLSearchParams();
+  if (search) params.set("q", search);
+  downloadAuthenticatedFile(`/admin/students/export-csv?${params}`, "students.csv");
+});
+document.getElementById("export-attendance-csv").addEventListener("click", () => {
+  const params = new URLSearchParams();
+  const department = document.getElementById("attendance-department").value.trim();
+  const section = document.getElementById("attendance-section-filter").value.trim();
+  const course = document.getElementById("attendance-course").value.trim();
+  if (department) params.set("department", department);
+  if (section) params.set("section", section);
+  if (course) params.set("course_code", course);
+  downloadAuthenticatedFile(`/admin/attendance/export-csv?${params}`, "attendance.csv");
+});
 document.getElementById("student-search").addEventListener("input", () => {
   window.clearTimeout(window.studentSearchTimer);
   window.studentSearchTimer = window.setTimeout(loadStudents, 250);
@@ -608,7 +656,7 @@ document.getElementById("messages-modal").addEventListener("click", (event) => {
 document.getElementById("gallery-modal-download-all").addEventListener("click", (event) => {
   const code = event.target.dataset.code;
   if (!code) return;
-  window.open(`/admin/synced-gallery/${code}/download`, "_blank");
+  downloadAuthenticatedFile(`/admin/synced-gallery/${code}/download`, `${code}_gallery.zip`);
 });
 ["attendance-department", "attendance-section-filter", "attendance-course"].forEach((id) => {
   document.getElementById(id).addEventListener("input", () => {

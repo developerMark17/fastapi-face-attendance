@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +27,7 @@ class Settings(BaseSettings):
     # Face recognition
     face_tolerance: float = 0.5
     max_upload_mb: int = 5
-    uploads_dir: str = "uploads"
+    uploads_dir: str = "/data/uploads" if Path("/data").exists() else "uploads"
 
     # Geofence bonus feature
     office_latitude: float = 37.7749
