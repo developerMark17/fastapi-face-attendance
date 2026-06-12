@@ -1,0 +1,31 @@
+# fly.toml app configuration file generated for backend-mellowed-inlet-3230 on 2026-06-12T18:07:25+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'backend-mellowed-inlet-3230'
+primary_region = 'sin'
+
+[build]
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
+
+[mounts]
+  source = "sqlite_data"
+  destination = "/data"
+
+[env]
+  DATABASE_URL = "sqlite:////data/attendance.db"
+  UPLOADS_DIR = "/data/uploads"
