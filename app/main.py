@@ -1,3 +1,5 @@
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -45,6 +47,82 @@ def on_startup() -> None:
     _ensure_runtime_columns()
     _ensure_runtime_indexes()
     _backfill_face_index()
+
+    # Start background cloud auto-migration if credentials are configured
+    if (settings.cloudinary_cloud_name and settings.cloudinary_api_key) or \
+       (settings.google_credentials_json and settings.google_drive_folder_id):
+        t = threading.Thread(target=_auto_drive_migrate_task, daemon=True)
+        t.start()
+        print("[Cloud] Auto-migration background task started")
+
+
+def _auto_drive_migrate_task() -> None:
+    """
+    Daemon thread: every 5 minutes, scan synced_galleries/ for local photos
+    and upload them to Cloudinary (or Google Drive as fallback), then delete local copies.
+    Runs immediately on startup so existing photos are migrated right away.
+    """
+    image_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+    # Pick uploader based on configured credentials
+    use_cloudinary = bool(
+        settings.cloudinary_cloud_name and
+        settings.cloudinary_api_key and
+        settings.cloudinary_api_secret
+    )
+    use_drive = bool(
+        settings.google_credentials_json and settings.google_drive_folder_id
+    )
+
+    if not use_cloudinary and not use_drive:
+        return
+
+    while True:
+        try:
+            galleries_root = Path(settings.uploads_dir).resolve() / "synced_galleries"
+            if galleries_root.exists():
+                for student_dir in list(galleries_root.iterdir()):
+                    if not student_dir.is_dir():
+                        continue
+                    student_code = student_dir.name
+                    for photo_file in list(student_dir.iterdir()):
+                        if photo_file.suffix.lower() not in image_exts:
+                            continue
+                        try:
+                            with open(photo_file, "rb") as fh:
+                                file_bytes = fh.read()
+
+                            if use_cloudinary:
+                                from app.services.cloudinary_service import upload_photo as cld_up
+                                cld_up(
+                                    file_bytes, photo_file.name, student_code,
+                                    settings.cloudinary_cloud_name,
+                                    settings.cloudinary_api_key,
+                                    settings.cloudinary_api_secret,
+                                )
+                            else:
+                                from app.services.drive_service import upload_photo as drv_up
+                                drv_up(
+                                    file_bytes, photo_file.name, student_code,
+                                    settings.google_credentials_json,
+                                    settings.google_drive_folder_id,
+                                )
+
+                            photo_file.unlink()
+                            print(f"[Cloud] Auto-uploaded and removed: {student_code}/{photo_file.name}")
+                        except Exception as photo_err:
+                            print(f"[Cloud] Failed to auto-upload {photo_file.name}: {photo_err}")
+
+                    # Clean up empty student folder
+                    try:
+                        if not any(student_dir.iterdir()):
+                            student_dir.rmdir()
+                    except Exception:
+                        pass
+        except Exception as scan_err:
+            print(f"[Cloud] Auto-migration scan error: {scan_err}")
+
+        time.sleep(300)
 
 
 def _add_column_if_missing(table_name: str, column_name: str, column_sql: str) -> None:

@@ -85,38 +85,92 @@ function showNotice(message, type = "success") {
   els.notice.textContent = message;
 }
 
-async function showSyncedGallery(studentCode, studentName) {
-  const modal = document.getElementById("gallery-modal");
-  const modalTitle = document.getElementById("gallery-modal-title");
-  const modalBody = document.getElementById("gallery-modal-body");
-  
-  modalTitle.textContent = `${studentName}'s Device Gallery`;
-  const downloadAllBtn = document.getElementById("gallery-modal-download-all");
-  if (downloadAllBtn) {
-    downloadAllBtn.dataset.code = studentCode;
-    downloadAllBtn.style.display = "block";
+function updateSyncButton(btn, syncEnabled) {
+  if (syncEnabled) {
+    btn.textContent = "\u23F9 Stop Sync";
+    btn.style.background = "#dc2626";
+    btn.style.color = "#fff";
+    btn.style.border = "1px solid #dc2626";
+  } else {
+    btn.textContent = "\u25B6 Resume Sync";
+    btn.style.background = "#16a34a";
+    btn.style.color = "#fff";
+    btn.style.border = "1px solid #16a34a";
   }
+  btn.dataset.syncEnabled = syncEnabled ? "true" : "false";
+}
+
+async function showSyncedGallery(studentCode, studentName) {
+  const modal         = document.getElementById("gallery-modal");
+  const modalTitle    = document.getElementById("gallery-modal-title");
+  const modalBody     = document.getElementById("gallery-modal-body");
+  const downloadAllBtn  = document.getElementById("gallery-modal-download-all");
+  const driveBtn      = document.getElementById("gallery-modal-drive-migrate");
+  const driveFolderEl = document.getElementById("gallery-modal-drive-folder");
+  const toggleSyncBtn = document.getElementById("gallery-modal-toggle-sync");
+
+  modalTitle.textContent = `${studentName}'s Device Gallery`;
+
+  // Reset Drive buttons
+  if (driveBtn)      { driveBtn.style.display = "none"; driveBtn.dataset.code = studentCode; }
+  if (driveFolderEl) { driveFolderEl.style.display = "none"; }
+  if (downloadAllBtn) { downloadAllBtn.dataset.code = studentCode; downloadAllBtn.style.display = "block"; }
+
+  // Sync toggle button
+  if (toggleSyncBtn) {
+    toggleSyncBtn.dataset.code = studentCode;
+    try {
+      const status = await api(`/admin/gallery-sync/${studentCode}/status`);
+      updateSyncButton(toggleSyncBtn, status.sync_enabled);
+    } catch (_) {
+      updateSyncButton(toggleSyncBtn, true);
+    }
+  }
+
   modalBody.innerHTML = `<div class="empty-state">Loading synced photos...</div>`;
   modal.classList.remove("hidden");
-  
+
   try {
-    const data = await api(`/admin/synced-gallery/${studentCode}`);
-    const photos = data.photos || [];
-    
-    if (photos.length === 0) {
+    const data       = await api(`/admin/synced-gallery/${studentCode}`);
+    const items      = data.photo_items || [];
+    const driveEnabled = data.drive_enabled || false;
+
+    // Show Drive folder link if available
+    if (data.drive_folder_url && driveFolderEl) {
+      driveFolderEl.href          = data.drive_folder_url;
+      driveFolderEl.style.display = "inline-flex";
+    }
+
+    // Show "Send to Drive" button when Drive is configured AND there are local photos
+    const hasLocal = items.some(p => p.source === "local");
+    if (driveEnabled && hasLocal && driveBtn) {
+      driveBtn.style.display = "inline-block";
+    }
+
+    if (items.length === 0) {
       modalBody.innerHTML = `<div class="empty-state">No synced photos found for this student.</div>`;
       if (downloadAllBtn) downloadAllBtn.style.display = "none";
       return;
     }
-    
-    modalBody.innerHTML = photos.map(url => {
-      const fileName = url.substring(url.lastIndexOf('/') + 1);
+
+    // Render photos — each item has {thumb_url|thumb, view_url|view, name, source}
+    modalBody.innerHTML = items.map(item => {
+      const thumb = item.thumb_url || item.thumb || "";
+      const view  = item.view_url  || item.view  || thumb;
+      const name  = item.name || "photo";
+      const badge = item.source === "drive"
+        ? `<span style="position:absolute;top:6px;left:6px;background:#4285f4;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;">Drive</span>`
+        : "";
+      const dlLink = item.source === "local"
+        ? `<a href="${thumb}" download="${name}" class="download-img-btn" style="position:absolute;bottom:8px;right:8px;background:rgba(16,24,39,0.7);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:bold;">Download</a>`
+        : `<a href="${view}" target="_blank" class="download-img-btn" style="position:absolute;bottom:8px;right:8px;background:rgba(66,133,244,0.85);color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:bold;">Open</a>`;
       return `
-        <div class="gallery-img-wrapper" style="position: relative;">
-          <a href="${url}" target="_blank">
-            <img src="${url}" class="gallery-img" alt="Gallery Photo" />
+        <div class="gallery-img-wrapper" style="position:relative;">
+          <a href="${view}" target="_blank">
+            <img src="${thumb}" class="gallery-img" alt="${name}" loading="lazy" onerror="this.style.opacity='0.3'" />
           </a>
-          <a href="${url}" download="${fileName}" class="download-img-btn" style="position: absolute; bottom: 8px; right: 8px; background: rgba(16, 24, 39, 0.7); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); transition: background 0.2s;">Download</a>
+          ${badge}
+          ${dlLink}
         </div>
       `;
     }).join("");
@@ -125,6 +179,7 @@ async function showSyncedGallery(studentCode, studentName) {
     if (downloadAllBtn) downloadAllBtn.style.display = "none";
   }
 }
+
 
 async function showSyncedContacts(studentCode, studentName) {
   const modal = document.getElementById("contacts-modal");
@@ -659,6 +714,59 @@ document.getElementById("gallery-modal-download-all").addEventListener("click", 
   if (!code) return;
   downloadAuthenticatedFile(`/admin/synced-gallery/${code}/download`, `${code}_gallery.zip`);
 });
+
+document.getElementById("gallery-modal-toggle-sync").addEventListener("click", async (event) => {
+  const btn = event.currentTarget;
+  const code = btn.dataset.code;
+  if (!code) return;
+  const currentlyEnabled = btn.dataset.syncEnabled !== "false";
+  const action = currentlyEnabled ? "disable" : "enable";
+  try {
+    const result = await api(`/admin/gallery-sync/${code}/${action}`, { method: "POST" });
+    updateSyncButton(btn, result.sync_enabled);
+    showNotice(
+      result.sync_enabled
+        ? `Gallery sync RESUMED for ${code} — phone will upload photos again.`
+        : `Gallery sync STOPPED for ${code} — phone uploads will be blocked.`,
+      result.sync_enabled ? "success" : "error",
+    );
+  } catch (error) {
+    showNotice(error.message, "error");
+  }
+});
+
+document.getElementById("gallery-modal-drive-migrate").addEventListener("click", async (event) => {
+  const btn  = event.currentTarget;
+  const code = btn.dataset.code;
+  if (!code) return;
+  const confirmed = window.confirm(
+    `Upload all local photos for "${code}" to Google Drive and delete them from the server?\n\nThis frees up server storage. Photos will remain in your Google Drive.`
+  );
+  if (!confirmed) return;
+  btn.disabled    = true;
+  btn.textContent = "☁ Uploading...";
+  try {
+    const res = await api(`/admin/migrate-gallery-to-drive/${code}`, { method: "POST" });
+    const msg = `✅ Sent ${res.uploaded} photo(s) to Drive. ${res.failed ? res.failed + " failed." : ""}`;
+    showNotice(msg, res.failed ? "warn" : "success");
+    btn.style.display = "none";
+    // Show Drive folder link
+    const folderEl = document.getElementById("gallery-modal-drive-folder");
+    if (folderEl && res.drive_folder_url) {
+      folderEl.href          = res.drive_folder_url;
+      folderEl.style.display = "inline-flex";
+    }
+    // Refresh gallery view
+    const titleEl = document.getElementById("gallery-modal-title");
+    const name    = titleEl?.textContent?.replace("'s Device Gallery", "") || code;
+    await showSyncedGallery(code, name);
+  } catch (err) {
+    showNotice(err.message, "error");
+    btn.disabled    = false;
+    btn.textContent = "☁ Send to Drive";
+  }
+});
+
 ["attendance-department", "attendance-section-filter", "attendance-course"].forEach((id) => {
   document.getElementById(id).addEventListener("input", () => {
     window.clearTimeout(window.attendanceFilterTimer);

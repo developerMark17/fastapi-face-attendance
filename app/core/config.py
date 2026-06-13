@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
 
+    # Google Drive (optional)
+    google_credentials_json: str = ""
+    google_drive_folder_id: str = ""
+
+    # Cloudinary (optional — preferred over Google Drive, simpler auth)
+    # Sign up free at cloudinary.com — get Cloud Name, API Key, API Secret from dashboard
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

@@ -141,7 +141,14 @@
       <div class="modal-content">
         <header class="modal-header">
           <h3 id="gallery-modal-title">Device Gallery</h3>
-          <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button id="gallery-modal-drive-migrate" class="secondary-button" style="min-height:32px;height:32px;padding:0 12px;font-size:12px;border-radius:6px;background:#4285f4;color:#fff;border:1px solid #4285f4;display:none;">
+              ☁ Send to Drive
+            </button>
+            <a id="gallery-modal-drive-folder" href="#" target="_blank" style="min-height:32px;height:32px;padding:0 12px;font-size:12px;border-radius:6px;background:#34a853;color:#fff;border:1px solid #34a853;text-decoration:none;align-items:center;display:none;">
+              📁 Open Drive Folder
+            </a>
+            <button id="gallery-modal-toggle-sync" class="secondary-button" style="min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px;">⏹ Stop Sync</button>
             <button id="gallery-modal-download-all" class="secondary-button" style="min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; border-radius: 6px;">Download All (ZIP)</button>
             <button id="gallery-modal-close" class="close-button">&times;</button>
           </div>

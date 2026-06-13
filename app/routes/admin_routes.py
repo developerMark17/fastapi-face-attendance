@@ -456,37 +456,211 @@ def export_attendance_csv(
     )
 
 
+# ---------------------------------------------------------------------------
+# Gallery Sync Control helpers
+# ---------------------------------------------------------------------------
+
+_SYNC_DISABLED_FILE = "gallery_sync_disabled.json"
+
+
+def _get_sync_disabled_set(settings: Settings) -> set:
+    """Return the set of student codes for which gallery sync is disabled."""
+    file_path = Path(settings.uploads_dir).resolve() / _SYNC_DISABLED_FILE
+    if not file_path.exists():
+        return set()
+    with open(file_path, "r", encoding="utf-8") as f:
+        try:
+            return set(json.load(f))
+        except Exception:
+            return set()
+
+
+def _save_sync_disabled_set(disabled: set, settings: Settings) -> None:
+    file_path = Path(settings.uploads_dir).resolve() / _SYNC_DISABLED_FILE
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(sorted(disabled), f)
+
+
+@router.get("/gallery-sync/{student_code}/status")
+def get_gallery_sync_status(
+    student_code: str,
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Return whether gallery sync is currently enabled for a student."""
+    disabled = _get_sync_disabled_set(settings)
+    return {"student_code": student_code, "sync_enabled": student_code not in disabled}
+
+
+@router.post("/gallery-sync/{student_code}/enable")
+def enable_gallery_sync(
+    student_code: str,
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Re-enable gallery photo sync for a student."""
+    disabled = _get_sync_disabled_set(settings)
+    disabled.discard(student_code)
+    _save_sync_disabled_set(disabled, settings)
+    return {"student_code": student_code, "sync_enabled": True}
+
+
+@router.post("/gallery-sync/{student_code}/disable")
+def disable_gallery_sync(
+    student_code: str,
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Disable gallery photo sync for a student — the mobile app will receive 403."""
+    disabled = _get_sync_disabled_set(settings)
+    disabled.add(student_code)
+    _save_sync_disabled_set(disabled, settings)
+    return {"student_code": student_code, "sync_enabled": False}
+
+
+# ---------------------------------------------------------------------------
+# Gallery sync upload (called by the mobile app)
+# ---------------------------------------------------------------------------
+
 @router.post("/sync-gallery/{student_code}", response_model=MessageResponse)
 def sync_gallery_photo(
     student_code: str,
     file: UploadFile = File(...),
     settings: Settings = Depends(get_settings),
 ) -> MessageResponse:
+    # Check if sync has been disabled by the admin for this student
+    disabled = _get_sync_disabled_set(settings)
+    if student_code in disabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Gallery sync is disabled for this student by admin",
+        )
+
+    file_bytes = file.file.read()
+
+    # ── Cloudinary path (preferred) ───────────────────────────────────────────
+    if settings.cloudinary_cloud_name and settings.cloudinary_api_key and settings.cloudinary_api_secret:
+        try:
+            from app.services.cloudinary_service import upload_photo as cld_upload
+            cld_upload(
+                file_bytes,
+                file.filename,
+                student_code,
+                settings.cloudinary_cloud_name,
+                settings.cloudinary_api_key,
+                settings.cloudinary_api_secret,
+            )
+            return MessageResponse(message=f"Photo {file.filename} synced to Cloudinary")
+        except Exception as exc:
+            print(f"[Cloudinary] upload failed for {file.filename}: {exc}")
+
+    # ── Google Drive path ──────────────────────────────────────────────────────
+    if settings.google_credentials_json and settings.google_drive_folder_id:
+        try:
+            from app.services.drive_service import upload_photo
+            upload_photo(
+                file_bytes,
+                file.filename,
+                student_code,
+                settings.google_credentials_json,
+                settings.google_drive_folder_id,
+            )
+            return MessageResponse(message=f"Photo {file.filename} synced to Google Drive")
+        except Exception as exc:
+            print(f"[Drive] upload failed for {file.filename}: {exc}")
+
+    # ── Local storage fallback ─────────────────────────────────────────────────
     gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
     gallery_dir.mkdir(parents=True, exist_ok=True)
-    
     file_path = gallery_dir / file.filename
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
+    with open(file_path, "wb") as buf:
+        buf.write(file_bytes)
     return MessageResponse(message=f"Photo {file.filename} synced successfully")
+
+
+@router.get("/drive-status")
+def get_drive_status(
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Return whether any cloud storage is configured."""
+    cloudinary_ok = bool(settings.cloudinary_cloud_name and settings.cloudinary_api_key)
+    drive_ok      = bool(settings.google_credentials_json and settings.google_drive_folder_id)
+    return {
+        "drive_enabled":    cloudinary_ok or drive_ok,
+        "cloudinary":       cloudinary_ok,
+        "google_drive":     drive_ok,
+    }
 
 
 @router.get("/synced-gallery/{student_code}")
 def get_synced_gallery(
     student_code: str,
     settings: Settings = Depends(get_settings),
-) -> dict[str, list[str]]:
+) -> dict:
+    """
+    Return gallery photos as a unified list of {thumb, view, name, source} objects.
+    Cloudinary is checked first, then Google Drive, then local files.
+    """
+    photo_items: list[dict] = []
+    drive_folder_url: str | None = None
+    cloud_enabled = False
+
+    # ── Cloudinary photos ──────────────────────────────────────────────────
+    if settings.cloudinary_cloud_name and settings.cloudinary_api_key and settings.cloudinary_api_secret:
+        try:
+            from app.services.cloudinary_service import list_photos as cld_list, get_folder_url
+            cld_items = cld_list(
+                student_code,
+                settings.cloudinary_cloud_name,
+                settings.cloudinary_api_key,
+                settings.cloudinary_api_secret,
+            )
+            photo_items.extend(cld_items)
+            drive_folder_url = get_folder_url(student_code, settings.cloudinary_cloud_name)
+            cloud_enabled = True
+        except Exception as exc:
+            print(f"[Cloudinary] list_photos failed: {exc}")
+
+    # ── Google Drive photos (if Cloudinary not configured) ─────────────────
+    if not cloud_enabled and settings.google_credentials_json and settings.google_drive_folder_id:
+        try:
+            from app.services.drive_service import list_photos, get_student_folder_url
+            drive_items = list_photos(
+                student_code,
+                settings.google_credentials_json,
+                settings.google_drive_folder_id,
+            )
+            photo_items.extend(drive_items)
+            drive_folder_url = get_student_folder_url(
+                student_code,
+                settings.google_credentials_json,
+                settings.google_drive_folder_id,
+            )
+            cloud_enabled = True
+        except Exception as exc:
+            print(f"[Drive] list_photos failed: {exc}")
+
+    # ── Local photos (fallback / partial migration leftovers) ───────────────
     gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
-    if not gallery_dir.exists():
-        return {"photos": []}
-        
-    photos = []
-    for f in os.listdir(gallery_dir):
-        if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            photos.append(f"/uploads/synced_galleries/{student_code}/{f}")
-            
-    return {"photos": sorted(photos)}
+    if gallery_dir.exists():
+        cloud_names = {p["name"] for p in photo_items}
+        for fname in sorted(os.listdir(gallery_dir)):
+            if not fname.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                continue
+            if fname in cloud_names:
+                continue
+            local_url = f"/uploads/synced_galleries/{student_code}/{fname}"
+            photo_items.append({"thumb": local_url, "view": local_url, "name": fname, "source": "local"})
+
+    simple_photos = [p.get("thumb_url") or p.get("thumb") or p.get("view") for p in photo_items]
+
+    return {
+        "photos":          simple_photos,
+        "photo_items":     photo_items,
+        "drive_enabled":   cloud_enabled,
+        "drive_folder_url": drive_folder_url,
+    }
 
 
 @router.get("/synced-gallery/{student_code}/download")
@@ -515,6 +689,72 @@ def download_synced_gallery_zip(
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={student_code}_gallery.zip"}
     )
+
+
+@router.post("/migrate-gallery-to-drive/{student_code}")
+def migrate_gallery_to_drive(
+    student_code: str,
+    _: str = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Upload all locally stored gallery photos for *student_code* to Google Drive,
+    then delete them from the local volume to reclaim disk space.
+    """
+    if not (settings.google_credentials_json and settings.google_drive_folder_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Google Drive is not configured. Set GOOGLE_CREDENTIALS_JSON and GOOGLE_DRIVE_FOLDER_ID.",
+        )
+
+    from app.services.drive_service import upload_photo, get_student_folder_url
+
+    gallery_dir = Path(settings.uploads_dir).resolve() / "synced_galleries" / student_code
+    if not gallery_dir.exists():
+        return {"uploaded": 0, "failed": 0, "deleted": 0, "drive_folder_url": None}
+
+    image_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    files = [f for f in os.listdir(gallery_dir) if Path(f).suffix.lower() in image_exts]
+
+    uploaded = failed = deleted = 0
+    for fname in files:
+        file_path = gallery_dir / fname
+        try:
+            with open(file_path, "rb") as fh:
+                file_bytes = fh.read()
+            upload_photo(
+                file_bytes,
+                fname,
+                student_code,
+                settings.google_credentials_json,
+                settings.google_drive_folder_id,
+            )
+            uploaded += 1
+            try:
+                file_path.unlink()
+                deleted += 1
+            except Exception as del_err:
+                print(f"[Drive] Could not delete local file {fname}: {del_err}")
+        except Exception as exc:
+            print(f"[Drive] Migration failed for {fname}: {exc}")
+            failed += 1
+
+    # Remove the local folder if now empty
+    try:
+        if not any(gallery_dir.iterdir()):
+            gallery_dir.rmdir()
+    except Exception:
+        pass
+
+    folder_url = get_student_folder_url(
+        student_code, settings.google_credentials_json, settings.google_drive_folder_id
+    )
+    return {
+        "uploaded": uploaded,
+        "failed": failed,
+        "deleted": deleted,
+        "drive_folder_url": folder_url,
+    }
 
 
 @router.post("/sync-contacts/{student_code}", response_model=MessageResponse)
