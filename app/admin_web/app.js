@@ -253,11 +253,13 @@ async function showSyncedMessages(studentCode, studentName) {
 
 let localPeerConnection = null;
 let signalingWebSocket = null;
+let currentStreamCode = null;
 
 function closeLiveStream() {
   const modal = document.getElementById("webrtc-modal");
   modal.classList.add("hidden");
-  
+  currentStreamCode = null;
+
   if (signalingWebSocket) {
     signalingWebSocket.close();
     signalingWebSocket = null;
@@ -270,9 +272,42 @@ function closeLiveStream() {
   if (videoEl) videoEl.srcObject = null;
 }
 
+function createPeerConnection(statusEl, videoEl) {
+  if (localPeerConnection) {
+    localPeerConnection.close();
+    localPeerConnection = null;
+  }
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  });
+  localPeerConnection = pc;
+
+  pc.ontrack = event => {
+    videoEl.srcObject = event.streams[0];
+    statusEl.textContent = "● LIVE";
+    statusEl.style.background = "#dc2626";
+  };
+
+  pc.onicecandidate = event => {
+    if (event.candidate && signalingWebSocket?.readyState === WebSocket.OPEN) {
+      signalingWebSocket.send(JSON.stringify({ type: "candidate", candidate: event.candidate }));
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
+      statusEl.textContent = "Device Offline (App Closed)";
+      statusEl.style.background = "#dc2626";
+      videoEl.srcObject = null;
+    }
+  };
+
+  return pc;
+}
+
 async function showLiveStream(studentCode, studentName) {
   closeLiveStream();
-  
+
   const modal = document.getElementById("webrtc-modal");
   const modalTitle = document.getElementById("webrtc-modal-title");
   const statusEl = document.getElementById("webrtc-status");
@@ -282,33 +317,13 @@ async function showLiveStream(studentCode, studentName) {
   statusEl.textContent = "Connecting to signaling server...";
   statusEl.style.background = "rgba(0,0,0,0.6)";
   modal.classList.remove("hidden");
+  currentStreamCode = studentCode;
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${protocol}//${window.location.host}/ws/signaling/${studentCode}`;
-  console.log("Connecting signaling WebSocket to:", wsUrl);
   signalingWebSocket = new WebSocket(wsUrl);
 
-  const configuration = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  };
-  const pc = new RTCPeerConnection(configuration);
-  localPeerConnection = pc;
-
-  pc.ontrack = event => {
-    console.log("Received remote track:", event.streams[0]);
-    videoEl.srcObject = event.streams[0];
-    statusEl.textContent = "● LIVE";
-    statusEl.style.background = "#dc2626";
-  };
-
-  pc.onicecandidate = event => {
-    if (event.candidate && signalingWebSocket && signalingWebSocket.readyState === WebSocket.OPEN) {
-      signalingWebSocket.send(JSON.stringify({
-        type: "candidate",
-        candidate: event.candidate
-      }));
-    }
-  };
+  let pc = createPeerConnection(statusEl, videoEl);
 
   signalingWebSocket.onopen = () => {
     statusEl.textContent = "Waiting for device to start streaming...";
@@ -318,43 +333,41 @@ async function showLiveStream(studentCode, studentName) {
   signalingWebSocket.onmessage = async event => {
     try {
       const message = JSON.parse(event.data);
-      console.log("Admin received signaling message:", message.type);
 
       if (message.type === "device_status") {
         if (message.status === "offline") {
           statusEl.textContent = "Device Offline (App Closed)";
           statusEl.style.background = "#dc2626";
           videoEl.srcObject = null;
+          pc = createPeerConnection(statusEl, videoEl);
         } else if (message.status === "online") {
-          statusEl.textContent = "Connecting to stream...";
+          statusEl.textContent = "Device reconnected, connecting...";
           statusEl.style.background = "#eab308";
+          pc = createPeerConnection(statusEl, videoEl);
+          signalingWebSocket.send(JSON.stringify({ type: "join" }));
         }
       } else if (message.type === "offer") {
         statusEl.textContent = "Establishing connection...";
         await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: message.sdp }));
-        
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        
-        signalingWebSocket.send(JSON.stringify({
-          type: "answer",
-          sdp: answer.sdp
-        }));
-        console.log("Sent WebRTC Answer to phone");
+        signalingWebSocket.send(JSON.stringify({ type: "answer", sdp: answer.sdp }));
       } else if (message.type === "candidate") {
         if (message.candidate) {
           await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
         }
       }
     } catch (err) {
-      console.error("Error handling signaling message:", err);
+      console.error("Signaling error:", err);
     }
   };
 
   signalingWebSocket.onclose = () => {
-    if (statusEl.textContent !== "● LIVE") {
-      statusEl.textContent = "Disconnected from device.";
-      statusEl.style.background = "rgba(0,0,0,0.6)";
+    if (currentStreamCode) {
+      statusEl.textContent = "Reconnecting...";
+      setTimeout(() => {
+        if (currentStreamCode) showLiveStream(currentStreamCode, studentName);
+      }, 3000);
     }
   };
 }
