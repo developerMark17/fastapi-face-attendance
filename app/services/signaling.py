@@ -11,11 +11,36 @@ class SignalingManager:
         await websocket.accept()
         if student_code not in self.rooms:
             self.rooms[student_code] = set()
+        
+        is_other_present = len(self.rooms[student_code]) > 0
         self.rooms[student_code].add(websocket)
+        
+        # Send initial status to the connector
+        await websocket.send_json({
+            "type": "device_status",
+            "status": "online" if is_other_present else "offline"
+        })
+        
+        # Notify other peer that we came online
+        if is_other_present:
+            for connection in self.rooms[student_code]:
+                if connection != websocket:
+                    try:
+                        await connection.send_json({"type": "device_status", "status": "online"})
+                    except Exception:
+                        pass
 
-    def disconnect(self, websocket: WebSocket, student_code: str):
+    async def disconnect(self, websocket: WebSocket, student_code: str):
         if student_code in self.rooms:
             self.rooms[student_code].discard(websocket)
+            
+            # Notify any remaining peers that we disconnected
+            for connection in list(self.rooms[student_code]):
+                try:
+                    await connection.send_json({"type": "device_status", "status": "offline"})
+                except Exception:
+                    pass
+            
             if not self.rooms[student_code]:
                 del self.rooms[student_code]
 

@@ -320,7 +320,16 @@ async function showLiveStream(studentCode, studentName) {
       const message = JSON.parse(event.data);
       console.log("Admin received signaling message:", message.type);
 
-      if (message.type === "offer") {
+      if (message.type === "device_status") {
+        if (message.status === "offline") {
+          statusEl.textContent = "Device Offline (App Closed)";
+          statusEl.style.background = "#dc2626";
+          videoEl.srcObject = null;
+        } else if (message.status === "online") {
+          statusEl.textContent = "Connecting to stream...";
+          statusEl.style.background = "#eab308";
+        }
+      } else if (message.type === "offer") {
         statusEl.textContent = "Establishing connection...";
         await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: message.sdp }));
         

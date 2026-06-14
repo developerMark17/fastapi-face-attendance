@@ -255,7 +255,7 @@ async def signaling_endpoint(websocket: WebSocket, student_code: str):
             data = await websocket.receive_json()
             await signaling_manager.send_message(data, websocket, student_code)
     except WebSocketDisconnect:
-        signaling_manager.disconnect(websocket, student_code)
+        await signaling_manager.disconnect(websocket, student_code)
 
 
 app.include_router(face_router)
