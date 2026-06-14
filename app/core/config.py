@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     payment_currency: str = "usd"
     public_base_url: str = "http://127.0.0.1:8000"
     stripe_secret_key: str = ""
+    
     stripe_webhook_secret: str = ""
 
     # Google Drive (optional)
