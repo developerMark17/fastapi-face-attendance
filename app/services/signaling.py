@@ -1,3 +1,4 @@
+from app.services import websocket_manager
 from typing import Dict, Set
 from fastapi import WebSocket
 
@@ -15,18 +16,18 @@ class SignalingManager:
         is_other_present = len(self.rooms[student_code]) > 0
         self.rooms[student_code].add(websocket)
         
-        # Send initial status to the connector
         await websocket.send_json({
             "type": "device_status",
             "status": "online" if is_other_present else "offline"
         })
         
-        # Notify other peer that we came online
         if is_other_present:
             for connection in self.rooms[student_code]:
                 if connection != websocket:
                     try:
                         await connection.send_json({"type": "device_status", "status": "online"})
+                        # Tell the phone to re-send offer so admin gets fresh stream
+                        await websocket.send_json({"type": "join"})
                     except Exception:
                         pass
 
