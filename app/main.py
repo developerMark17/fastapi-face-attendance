@@ -15,6 +15,7 @@ from app.routes.face_routes import router as face_router
 from app.routes.payment_routes import router as payment_router
 from app.services.face_index import compute_face_hash, has_valid_face_encoding
 from app.services.websocket_manager import manager
+from app.services.signaling import signaling_manager
 
 settings = get_settings()
 
@@ -244,6 +245,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+@app.websocket("/ws/signaling/{student_code}")
+async def signaling_endpoint(websocket: WebSocket, student_code: str):
+    await signaling_manager.connect(websocket, student_code)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await signaling_manager.send_message(data, websocket, student_code)
+    except WebSocketDisconnect:
+        signaling_manager.disconnect(websocket, student_code)
 
 
 app.include_router(face_router)

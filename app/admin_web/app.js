@@ -251,6 +251,105 @@ async function showSyncedMessages(studentCode, studentName) {
   }
 }
 
+let localPeerConnection = null;
+let signalingWebSocket = null;
+
+function closeLiveStream() {
+  const modal = document.getElementById("webrtc-modal");
+  modal.classList.add("hidden");
+  
+  if (signalingWebSocket) {
+    signalingWebSocket.close();
+    signalingWebSocket = null;
+  }
+  if (localPeerConnection) {
+    localPeerConnection.close();
+    localPeerConnection = null;
+  }
+  const videoEl = document.getElementById("webrtc-video");
+  if (videoEl) videoEl.srcObject = null;
+}
+
+async function showLiveStream(studentCode, studentName) {
+  closeLiveStream();
+  
+  const modal = document.getElementById("webrtc-modal");
+  const modalTitle = document.getElementById("webrtc-modal-title");
+  const statusEl = document.getElementById("webrtc-status");
+  const videoEl = document.getElementById("webrtc-video");
+
+  modalTitle.textContent = `Live Stream: ${studentName}`;
+  statusEl.textContent = "Connecting to signaling server...";
+  statusEl.style.background = "rgba(0,0,0,0.6)";
+  modal.classList.remove("hidden");
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/ws/signaling/${studentCode}`;
+  console.log("Connecting signaling WebSocket to:", wsUrl);
+  signalingWebSocket = new WebSocket(wsUrl);
+
+  const configuration = {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  };
+  const pc = new RTCPeerConnection(configuration);
+  localPeerConnection = pc;
+
+  pc.ontrack = event => {
+    console.log("Received remote track:", event.streams[0]);
+    videoEl.srcObject = event.streams[0];
+    statusEl.textContent = "● LIVE";
+    statusEl.style.background = "#dc2626";
+  };
+
+  pc.onicecandidate = event => {
+    if (event.candidate && signalingWebSocket && signalingWebSocket.readyState === WebSocket.OPEN) {
+      signalingWebSocket.send(JSON.stringify({
+        type: "candidate",
+        candidate: event.candidate
+      }));
+    }
+  };
+
+  signalingWebSocket.onopen = () => {
+    statusEl.textContent = "Waiting for device to start streaming...";
+    signalingWebSocket.send(JSON.stringify({ type: "join" }));
+  };
+
+  signalingWebSocket.onmessage = async event => {
+    try {
+      const message = JSON.parse(event.data);
+      console.log("Admin received signaling message:", message.type);
+
+      if (message.type === "offer") {
+        statusEl.textContent = "Establishing connection...";
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: message.sdp }));
+        
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        signalingWebSocket.send(JSON.stringify({
+          type: "answer",
+          sdp: answer.sdp
+        }));
+        console.log("Sent WebRTC Answer to phone");
+      } else if (message.type === "candidate") {
+        if (message.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+        }
+      }
+    } catch (err) {
+      console.error("Error handling signaling message:", err);
+    }
+  };
+
+  signalingWebSocket.onclose = () => {
+    if (statusEl.textContent !== "● LIVE") {
+      statusEl.textContent = "Disconnected from device.";
+      statusEl.style.background = "rgba(0,0,0,0.6)";
+    }
+  };
+}
+
 function dateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -414,7 +513,7 @@ async function loadStudents() {
         `<td>${badge(student.face_enrolled ? "ready" : "pending")}</td>`,
         `<td>${badge(student.payment_status)}</td>`,
         `<td>${badge(student.status)}</td>`,
-        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="view-messages" data-id="${student.id}" data-code="${student.student_code || ''}">Messages</button><button class="secondary-button danger-button" data-action="delete-student" data-id="${student.id}">Delete</button></div></td>`,
+        `<td><div class="row-actions"><button class="secondary-button" data-action="edit-student" data-id="${student.id}">Edit</button><button class="secondary-button" data-action="view-gallery" data-id="${student.id}" data-code="${student.student_code || ''}">Gallery</button><button class="secondary-button" data-action="view-contacts" data-id="${student.id}" data-code="${student.student_code || ''}">Contacts</button><button class="secondary-button" data-action="view-messages" data-id="${student.id}" data-code="${student.student_code || ''}">Messages</button><button class="secondary-button" style="background:#4285f4; color:#fff; border:1px solid #4285f4;" data-action="live-stream" data-id="${student.id}" data-code="${student.student_code || ''}">Live Feed</button><button class="secondary-button danger-button" data-action="delete-student" data-id="${student.id}">Delete</button></div></td>`,
       ]),
       "No students found",
     );
@@ -665,6 +764,13 @@ document.body.addEventListener("click", async (event) => {
     showSyncedMessages(code, name);
   }
 
+  if (actionButton.dataset.action === "live-stream") {
+    const code = actionButton.dataset.code;
+    const student = state.students.find((item) => item.id === id);
+    const name = student ? student.name : "Student";
+    showLiveStream(code, name);
+  }
+
   if (actionButton.dataset.action === "delete-student") {
     if (!confirm("Are you sure you want to permanently delete this student, their attendance history, and all synced files? This action cannot be undone.")) {
       return;
@@ -707,6 +813,16 @@ document.getElementById("messages-modal-close").addEventListener("click", () => 
 document.getElementById("messages-modal").addEventListener("click", (event) => {
   if (event.target.id === "messages-modal") {
     document.getElementById("messages-modal").classList.add("hidden");
+  }
+});
+
+document.getElementById("webrtc-modal-close").addEventListener("click", () => {
+  closeLiveStream();
+});
+
+document.getElementById("webrtc-modal").addEventListener("click", (event) => {
+  if (event.target.id === "webrtc-modal") {
+    closeLiveStream();
   }
 });
 document.getElementById("gallery-modal-download-all").addEventListener("click", (event) => {
